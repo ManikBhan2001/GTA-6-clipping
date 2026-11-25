@@ -5,11 +5,22 @@ import shutil
 import time
 from pathlib import Path
 
-from .common import Problem, read_json, run, say, write_json
+from .common import Problem, probe, read_json, run, say, write_json
 
 META_KEYS = ("id", "title", "channel", "uploader", "duration", "view_count", "live_status",
              "is_live", "was_live", "webpage_url", "extractor_key", "timestamp",
              "release_timestamp", "upload_date")
+
+
+def local_path(url):
+    """The file behind a local video (a path or file:// link), or None for web links."""
+    text = str(url)
+    if text.startswith("file://"):
+        text = text[len("file://"):]
+    elif "://" in text:
+        return None
+    path = Path(text).expanduser()
+    return path if path.is_file() else None
 
 
 def ytdlp_args(url, cookies=None):
@@ -47,6 +58,15 @@ def friendly(exc, url):
 
 def metadata(url, args, work, refresh=False):
     cached = work / "meta.json"
+    src = local_path(url)
+    if src:
+        meta = {k: None for k in META_KEYS}
+        meta.update(id=src.stem, title=src.stem.replace("_", " "), duration=probe(src)["duration"],
+                    webpage_url=str(src), extractor_key="local")
+        meta["name"] = src.parent.name if src.parent.name not in ("input", "") else "creator"
+        meta["_at"] = time.time()
+        write_json(cached, meta)
+        return meta
     meta = read_json(cached)
     stale = meta and meta.get("live_status") == "is_live" and time.time() - meta.get("_at", 0) > 300
     if meta and not refresh and not stale:
@@ -76,6 +96,14 @@ def audio(url, args, work, live=False):
         return have[0]
     for old in work.glob("audio.*"):
         old.unlink(missing_ok=True)
+    src = local_path(url)
+    if src:
+        say("extracting the audio track from the local file...", "step")
+        out = work / "audio.m4a"
+        run(["ffmpeg", "-v", "error", "-y", "-i", src, "-vn", "-ac", "1", "-c:a", "aac",
+             "-b:a", "96k", out], timeout=4 * 3600)
+        say(f"audio ready ({out.stat().st_size / 1e6:.0f} MB)", "good")
+        return out
     say("downloading the audio track (video comes later, only for the clips)...", "step")
     extra = ["--live-from-start"] if live and "youtu" in url else []
     try:
@@ -96,6 +124,14 @@ def video_slice(url, args, start, end, dest: Path, max_height):
         return dest
     for old in dest.parent.glob(dest.stem + ".*"):
         old.unlink(missing_ok=True)
+    src = local_path(url)
+    if src:
+        start = max(0, start)
+        run(["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.2f}", "-i", src,
+             "-t", f"{end - start:.2f}",
+             "-vf", f"scale=-2:'min({max_height},ih)'", "-c:v", "libx264", "-preset", "veryfast",
+             "-crf", "18", "-c:a", "aac", "-b:a", "192k", dest.with_suffix(".mp4")], timeout=1800)
+        return dest
     fmt = (f"bv*[height<={max_height}][vcodec^=avc1]+ba/bv*[height<={max_height}]+ba/"
            f"b[height<={max_height}]/bv*+ba/b")
     try:
