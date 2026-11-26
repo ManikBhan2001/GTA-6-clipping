@@ -1,0 +1,29 @@
+{
+  "name": "sports-analytics",
+  "version": 1,
+  "created": "2026-11-26T08:51:37Z",
+  "updated": "2026-11-26T08:51:59Z",
+  "refs": [
+    {
+      "id": "genre1",
+      "src": "/root/.claude/uploads/d55a9a40-0d7f-5b23-94f4-37e9665ed403/0d058267-videoplayback_1.mp4",
+      "duration": 110.96,
+      "n_shots": 40
+    }
+  ],
+  "artifacts": {
+    "lut": "look.cube",
+    "grade": true,
+    "cadence": true,
+    "spec": false,
+    "stills": 12,
+    "props": 0,
+    "plates": 9
+  },
+  "mint": {
+    "lut_size": 33,
+    "strength": 1.0,
+    "pixels_analyzed": 4600608,
+    "ui_masked": true
+  }
+}
